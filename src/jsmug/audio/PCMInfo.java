@@ -1,4 +1,4 @@
-package audio;
+package jsmug.audio;
 
 public interface PCMInfo {
 	public int getSampleRate();

@@ -1,4 +1,4 @@
-package audio;
+package jsmug.audio;
 
 import java.io.IOException;
 import java.io.InputStream;

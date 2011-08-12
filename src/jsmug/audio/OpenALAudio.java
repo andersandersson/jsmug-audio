@@ -1,22 +1,23 @@
-package audio;
+package jsmug.audio;
 
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
-import java.nio.ShortBuffer;
 import java.util.LinkedList;
 import java.util.List;
 
 import org.lwjgl.BufferUtils;
 import org.lwjgl.LWJGLException;
-import org.lwjgl.openal.*;
-import org.lwjgl.util.WaveData;
+import org.lwjgl.openal.AL;
+import org.lwjgl.openal.AL10;
+import org.lwjgl.openal.ALC10;
+import org.lwjgl.openal.ALC11;
+import org.lwjgl.openal.ALCcontext;
+import org.lwjgl.openal.ALCdevice;
 
-public class Audio {
+public class OpenALAudio implements Audio {
 	private ALCcontext context;
 	private ALCdevice device;
 	
@@ -32,7 +33,7 @@ public class Audio {
 	private FloatBuffer soundFloatBuffer;
 	private ByteBuffer soundByteBuffer;
 	
-	public Audio() {
+	public OpenALAudio() {
 		this.sounds = new LinkedList<OpenALSound>();
 		this.listenerPosition = BufferUtils.createFloatBuffer(3);
 		this.listenerVelocity = BufferUtils.createFloatBuffer(3);
@@ -65,16 +66,6 @@ public class Audio {
 
 	public void finish() {
 		AL.destroy();
-	}
-	
-	public void resetListener() {
-		this.listenerPosition.put(new float[]{0.0f, 0.0f, 0.0f}).rewind();
-		this.listenerVelocity.put(new float[]{0.0f, 0.0f, 0.0f}).rewind();
-		this.listenerOrientation.put(new float[]{0.0f, 0.0f, -1.0f,  0.0f, 1.0f, 0.0f}).rewind();
-		
-		AL10.alListener(AL10.AL_POSITION, this.listenerPosition);
-		AL10.alListener(AL10.AL_VELOCITY, this.listenerVelocity);
-		AL10.alListener(AL10.AL_ORIENTATION, this.listenerOrientation);
 	}
 	
 	public String getDefaultDeviceName() {
@@ -127,6 +118,16 @@ public class Audio {
 	}
 	
 
+	private void resetListener() {
+		this.listenerPosition.put(new float[]{0.0f, 0.0f, 0.0f}).rewind();
+		this.listenerVelocity.put(new float[]{0.0f, 0.0f, 0.0f}).rewind();
+		this.listenerOrientation.put(new float[]{0.0f, 0.0f, -1.0f,  0.0f, 1.0f, 0.0f}).rewind();
+		
+		AL10.alListener(AL10.AL_POSITION, this.listenerPosition);
+		AL10.alListener(AL10.AL_VELOCITY, this.listenerVelocity);
+		AL10.alListener(AL10.AL_ORIENTATION, this.listenerOrientation);
+	}
+	
 	private int findFreeSource() {
 		this.sources.position(0);
 		while(this.sources.hasRemaining()) {
@@ -192,7 +193,7 @@ public class Audio {
 	}
 	
 	
-	public void playSound(OpenALSound sound) {
+	private void playSound(OpenALSound sound) {
 		int source = sound.getSource();
 		if(source != 0) {
 			AL10.alSourcef(source, AL10.AL_PITCH, 1.0f);
@@ -203,14 +204,14 @@ public class Audio {
 		}
 	}
 	
-	public void stopSource(int source) {
+	private void stopSource(int source) {
 		if(source != 0) {
 			AL10.alSourceStop(source);
 			AL10.alSourcei(source, AL10.AL_BUFFER, 0);
 		}
 	}
 	
-	public void stopSound(OpenALSound sound) {
+	private void stopSound(OpenALSound sound) {
 		int source = sound.getSource();
 		this.stopSource(source);
 		sound.setSource(0);

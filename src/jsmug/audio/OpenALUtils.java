@@ -1,4 +1,4 @@
-package audio;
+package jsmug.audio;
 
 import org.lwjgl.openal.AL10;
 

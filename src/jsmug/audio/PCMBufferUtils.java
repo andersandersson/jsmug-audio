@@ -1,4 +1,4 @@
-package audio;
+package jsmug.audio;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;

@@ -9,15 +9,14 @@ import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.util.Scanner;
 
+import jsmug.audio.*;
+
 import org.lwjgl.BufferUtils;
 import org.lwjgl.LWJGLException;
 import org.lwjgl.openal.AL;
 import org.lwjgl.openal.AL10;
 import org.lwjgl.util.WaveData;
 
-import audio.Audio;
-import audio.OggFloatStream;
-import audio.Sound;
 import org.newdawn.slick.util.Log;
 
 public class AudioTest {
@@ -34,7 +33,7 @@ public class AudioTest {
 		    System.exit(0);
 		}
 
-		Audio audio = new Audio();
+		Audio audio = new OpenALAudio();
 		audio.init();
 		
 //		WaveData waveFile;

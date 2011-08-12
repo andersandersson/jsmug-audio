@@ -1,4 +1,4 @@
-package audio;
+package jsmug.audio;
 
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
