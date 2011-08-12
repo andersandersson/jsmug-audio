@@ -49,13 +49,14 @@ public class AudioTest {
 
 		Sound sound = audio.newSoundStream("music1_lead2.ogg");
 		sound.setLooping(true);
-		//sound.play();
+		sound.seek(2000000);
+		sound.play();
 		Sound s = audio.newSound("menumove.ogg");
 
 		while (!Display.isCloseRequested()) {
 			s.play();
 			audio.update(0.0);
-			Display.sync(10);
+			Display.sync(30);
 		    Display.update();
 		}
 			
