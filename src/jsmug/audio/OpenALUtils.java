@@ -2,7 +2,7 @@ package jsmug.audio;
 
 import org.lwjgl.openal.AL10;
 
-public class OpenALUtils {
+class OpenALUtils {
 	public static String getALErrorString(int error) {
 		String str = "";
 		

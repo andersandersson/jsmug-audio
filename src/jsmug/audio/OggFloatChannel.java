@@ -9,6 +9,7 @@ import java.io.Writer;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.channels.Channels;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
 import java.util.Locale;
 
@@ -23,7 +24,7 @@ import com.jcraft.jorbis.Comment;
 import com.jcraft.jorbis.DspState;
 import com.jcraft.jorbis.Info;
 
-public class OggFloatStream implements PCMFloatStream {
+public class OggFloatChannel implements PCMFloatChannel {
 	// Objects for reading ogg
 	private Packet joggPacket = new Packet();
 	private Page joggPage = new Page();
@@ -44,23 +45,28 @@ public class OggFloatStream implements PCMFloatStream {
     private float[][][] pcmInfo = null;
     private int[] pcmIndex = null;
     
-	private int channels;
-	private int sampleRate;
-	private int sampleCount;
+	private int channels = 0;
+	private int sampleRate = 0;
+	private float volume = 1.0f;
+	
+	private long sampleCount = 0;
+	private long size = 0;
 	
 	private boolean endOfStream = false;
 	private boolean needNewPacket = true;
 	private boolean hasPacket = false;
 	
 	private boolean initialized = false;
+	private boolean isOpen = false;
 	
 	private void log(String string) {
 		System.out.println(string);
 	}
 	
 	
-	public OggFloatStream(FileChannel input) {
+	public OggFloatChannel(FileChannel input) {
 		this.input = input;
+		this.isOpen = input.isOpen();
 	}
 	
 	
@@ -262,7 +268,7 @@ public class OggFloatStream implements PCMFloatStream {
 	
 	
 	// Decode the current packet to PCM float format
-	private void decodeNextPacket(FloatBuffer dst, int maxCount) {	
+	private void decodeNextPacket(FloatBuffer dst, long maxCount) {	
 		// Check that the packet is a audio data packet etc.
 		if(this.needNewPacket) {
 	        if(this.jorbisBlock.synthesis(this.joggPacket) == 0)
@@ -275,8 +281,8 @@ public class OggFloatStream implements PCMFloatStream {
 			this.needNewPacket = false;
 		}
         
-        int samples=0; // How many samples jorbis has
-        int range=0;   // How many we can handle
+		long samples=0; // How many samples jorbis has
+        long range=0;   // How many we can handle
         
         boolean done = false;
         
@@ -313,20 +319,38 @@ public class OggFloatStream implements PCMFloatStream {
         	// Read pcm samples
         	for(int i=0; i<range; i++) {
         		for(int j=0; j<this.channels; j++) {
-        			dst.put(this.pcmInfo[0][j][this.pcmIndex[j] + i]);
+        			dst.put(this.pcmInfo[0][j][this.pcmIndex[j] + i]*this.volume);
         		}
         	}
         	
-        	this.jorbisDspState.synthesis_read(range);
+        	this.jorbisDspState.synthesis_read((int)range);
         	this.sampleCount += range;
         }        
 	}
 
-
-	@Override
-	public boolean seek(int position) {
+	private void assertChannel() throws ClosedChannelException {
+		if(!this.isOpen) {
+			throw new ClosedChannelException();
+		}
+		
 		if(!this.initialized) {
 			this.init();
+		}
+	}
+	
+
+	@Override
+	public long position() throws ClosedChannelException {
+		this.assertChannel();
+		
+		return this.sampleCount;
+	}
+
+
+	@Override
+	public PCMFloatChannel position(long position) throws ClosedChannelException {
+		if(position < 0) {
+			throw new IllegalArgumentException("Position must be positive, got: " + position);
 		}
 		
 		this.endOfStream = false;
@@ -335,64 +359,111 @@ public class OggFloatStream implements PCMFloatStream {
 		this.sampleCount = 0;
 
 		boolean found = false; 
-				
+
 		try {
 			this.input.position(0);
-			this.joggSyncState.reset();
-			
-			// Read first page with initialization
-			this.readNextPage(true);
-
-			// Keep reading packets and pages until position is found
-			while(!found) {
-				if(this.needNewPacket) {
-					if(!this.readNextPacket()) {
-						// End of stream reached, return false
-						return false;
-					}
-				}
-
-				// Reset seek buffer and decode next packet
-				this.seekBuffer.position(0);
-				this.decodeNextPacket(this.seekBuffer, position);
-						
-				// If sampleCount equals position we have found the place
-				if(this.sampleCount == position) {
-					found = true;
-				}
-				
-				if(this.endOfStream) {
-					found = false;
-					break;
-				}
-			}
 		} catch (IOException e) {
 			e.printStackTrace();
+			return this;
 		}
 		
-		return found;
+		this.joggSyncState.reset();
+		this.joggSyncState.init();
+
+		// Read first page with initialization
+		this.readHeader();
+		this.initSound();
+		
+		// Keep reading packets and pages until position is found
+		while(!found) {
+			if(this.needNewPacket) {
+				if(!this.readNextPacket()) {
+					// End of stream reached. do nothing
+					return this;
+				}
+			}
+
+			// Reset seek buffer and decode next packet
+			this.seekBuffer.position(0);
+			this.decodeNextPacket(this.seekBuffer, position);
+					
+			// If sampleCount equals position we have found the place
+			if(this.sampleCount == position) {
+				found = true;
+			}
+			
+			if(this.endOfStream) {
+				found = false;
+				break;
+			}
+		}
+		
+		return this;
 	}
 
 	
 	// Read next part from stream to dst
-	public int read(FloatBuffer dst) {		
+	public long read(FloatBuffer dst) throws ClosedChannelException {		
+		this.assertChannel();
+		
+		return this.read(new FloatBuffer[]{dst}, 0, 1);
+	}
 
+	
+	@Override
+	public long read(FloatBuffer[] dsts) throws ClosedChannelException {
+		this.assertChannel();
+		
+		return this.read(dsts, 0, dsts.length);
+	}
+
+
+	@Override
+	public long read(FloatBuffer dst, long position) throws ClosedChannelException {
+		this.assertChannel();
+		
+		// Save current position
+		long oldPosition = this.sampleCount;
+		
+		// Move to given position
+		this.position(position);
+		
+		// Read floats and save floats read
+		long length = this.read(new FloatBuffer[]{dst}, 0, 1);
+		
+		// Reset position back to original
+		this.position(oldPosition);
+				
+		return length;
+	}
+
+
+	@Override
+	public long read(FloatBuffer[] dsts, int offset, int length) throws ClosedChannelException {
+		this.assertChannel();
+		
 		// If we have reached end of stream, return -1
 		if(this.endOfStream) {
 			return -1;
 		}
 		
-		// Initialize if we haven't already
-		if(!this.initialized) {
-			if(!this.init()) {
-				return -1;
-			}
+		// Check arguments 
+		if(offset < 0) {
+			throw new IllegalArgumentException("Offset must be non-negative, got: "+offset);
 		}
-
+		
+		if(length < 0) {
+			throw new IllegalArgumentException("Length must be non-negative, got: "+length);
+		}
+		
 		// Read more data as long as endOfStream is not reached and
 		// there is space left in dst
-		while(!this.endOfStream && dst.remaining() > this.channels) {
+		int currentDst = offset;
+		long startPos = this.sampleCount;
 		
+		while(!this.endOfStream && currentDst < offset+length) {
+			FloatBuffer dst = dsts[currentDst];
+			
 			// If we have reached the end of a packet, read next
 			if(this.needNewPacket) {
 				this.hasPacket = this.readNextPacket();
@@ -402,21 +473,69 @@ public class OggFloatStream implements PCMFloatStream {
 			if(this.hasPacket) {
 				this.decodeNextPacket(dst, (int) this.joggPage.granulepos());
 			}
+			
+			// Go to next dst if this is full
+			if(!dst.hasRemaining()) {
+				currentDst++;
+			}
 		}
 
-		return dst.position();
+		return this.sampleCount - startPos;
 	}
 
-	
-	// Reset by resetting stream.
-	public void reset() {
-		this.seek(0);
-	}
 
-	public void dispose() {
+	@Override
+	public void close() {
+		this.isOpen = false;
+		
+		this.joggStreamState.clear();
 		this.joggSyncState.clear();
+		this.jorbisDspState.clear();
+		this.jorbisBlock.clear();
+		this.jorbisInfo.clear();
+
+		if(this.input != null) {
+			try {
+				this.input.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
 	}
 
+
+	@Override
+	public boolean isOpen() {
+		return this.isOpen;
+	}
+
+
+	@Override
+	public long size() throws ClosedChannelException {
+		this.assertChannel();
+		
+		// If we have calculated size before, use that value
+		if(this.size > 0) {
+			return this.size;
+		}
+		
+		long oldPosition = this.sampleCount;
+		
+		// Set position at beginning of stream
+		this.position(0);		
+		while(this.readNextPage()) {
+			// do nothing
+		}
+		
+		// Last page granuleposition will be the size of the stream.
+		this.size = this.joggPage.granulepos();
+		
+		// Return to old position
+		this.position(oldPosition);
+		
+		return this.size;
+	}
+	
 	
 	@Override
 	public int getChannels() {
@@ -439,23 +558,23 @@ public class OggFloatStream implements PCMFloatStream {
 
 
 	@Override
-	public int getBits() {
+	public int getBits() {		
+		if(!this.initialized) {
+			this.init();
+		}
+
 		return 16;
 	}
-	
-	
+
+
 	@Override
-	public boolean eos() {
-		return this.endOfStream;
+	public float getVolume() {
+		return this.volume;
 	}
 
 
 	@Override
-	public void close() {
-		try {
-			this.input.close();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-	}
+	public void setVolume(float volume) {
+		this.volume = volume;
+	}	
 }

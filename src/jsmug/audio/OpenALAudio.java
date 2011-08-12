@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
+import java.nio.channels.ClosedChannelException;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -88,28 +89,45 @@ public class OpenALAudio implements Audio {
 	public Sound newSound(String filename) {
 		try {
 			FileInputStream input = new FileInputStream(filename);
-			OggFloatStream stream = new OggFloatStream(input.getChannel());
-			OpenALSound sound = new OpenALSound(stream, this.soundBufferSize);
-			this.sounds.add(sound);
-			return sound;
+			OggFloatChannel channel  = new OggFloatChannel(input.getChannel());
+			return this.newSound(channel);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 		return null;
 	}
 	
+	public Sound newSound(PCMFloatChannel channel) {
+		OpenALSound sound = new OpenALSound(channel, this.soundBufferSize);
+		this.sounds.add(sound);
+		return sound;
+	}
+	
+	
 	public Sound newSoundStream(String filename) {
 		try {
 			FileInputStream input = new FileInputStream(filename);
-			OggFloatStream stream = new OggFloatStream(input.getChannel());
-			OpenALSound sound = new OpenALSound(stream);
-			this.sounds.add(sound);
-			return sound;
+			OggFloatChannel channel = new OggFloatChannel(input.getChannel());
+			return this.newSoundStream(channel);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 		return null;
 	}
+	
+	
+	public Sound newSoundStream(PCMFloatChannel channel) {
+		OpenALSound sound = new OpenALSound(channel);
+		try {
+			System.out.println("SIZE: "+channel.size());
+		} catch (ClosedChannelException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		this.sounds.add(sound);
+		return sound;
+	}
+	
 	
 	public void update(double deltaTime) {
 		for(OpenALSound s : this.sounds) {
@@ -166,10 +184,9 @@ public class OpenALAudio implements Audio {
 				return -1;
 			}
 		}
-		
 		this.soundFloatBuffer.flip();
 		this.soundByteBuffer.clear();				
-		PCMBufferUtils.convertFloatToByte(this.soundFloatBuffer, this.soundByteBuffer);		
+		PCMUtils.convertFloatToByte(this.soundFloatBuffer, this.soundByteBuffer);		
 		this.soundByteBuffer.flip();
 		
 		int format = 0;
@@ -185,7 +202,7 @@ public class OpenALAudio implements Audio {
 			format = -1;
 		}
 
-		int length = this.soundByteBuffer.capacity();
+		int length = this.soundByteBuffer.limit();
 		
 		AL10.alBufferData(buffer, format, this.soundByteBuffer, sound.getSampleRate());
 		
@@ -252,7 +269,7 @@ public class OpenALAudio implements Audio {
 			}
 			
 			// Make sure we have 3 buffers on a stream
-			if(queued < 3) {
+			if(queued < 20) {
 				for(int i=0; i<3-queued; i++) {
 					int buffer = this.createBuffer();
 					int length = this.fillBuffer(buffer, sound);

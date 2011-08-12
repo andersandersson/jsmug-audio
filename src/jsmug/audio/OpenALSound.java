@@ -1,6 +1,8 @@
 package jsmug.audio;
 
+import java.io.IOException;
 import java.nio.FloatBuffer;
+import java.nio.channels.ClosedChannelException;
 
 import org.lwjgl.BufferUtils;
 import org.lwjgl.openal.AL10;
@@ -22,10 +24,10 @@ class OpenALSound implements Sound {
 	int bits = 0;
 	int channels = 0;
 	
-	PCMFloatStream input;
+	PCMFloatChannel input;
 	FloatBuffer data = null;
 	
-	public OpenALSound(PCMFloatStream input) {
+	public OpenALSound(PCMFloatChannel input) {
 		this.input = input;
 		this.eos = false;
 		this.isStream = true;
@@ -36,7 +38,7 @@ class OpenALSound implements Sound {
 
 	}
 	
-	public OpenALSound(PCMFloatStream input, int bufferSize) {
+	public OpenALSound(PCMFloatChannel input, int bufferSize) {
 		this.input = input;
 		this.eos = false;
 		this.isStream = false;
@@ -49,11 +51,19 @@ class OpenALSound implements Sound {
 		FloatBuffer tmp2;
 		
 		// Allocate tmp buffer for about 10s of data
-		while(input.read(tmp) > 0) {
-			tmp2 = BufferUtils.createFloatBuffer(tmp.limit()+bufferSize);
-			tmp.flip();
-			tmp2.put(tmp);
-			tmp = tmp2;
+		try {
+			while(input.read(tmp) > 0) {
+				tmp2 = BufferUtils.createFloatBuffer(tmp.limit()+bufferSize);
+				tmp.flip();
+				tmp2.put(tmp);
+				tmp = tmp2;
+			}
+		}
+		catch(ClosedChannelException e) {
+			e.printStackTrace();
+			this.input = null;
+			this.data = null;
+			return;
 		}
 		
 		// Force stream mode if we don't fit into one buffer
@@ -66,8 +76,8 @@ class OpenALSound implements Sound {
 		this.data.flip();
 	}
 
-	public int read(FloatBuffer dst) {
-		int length = 0;
+	public long read(FloatBuffer dst) {
+		long length = 0;
 		
 		if(this.data != null) {
 			if(!this.data.hasRemaining()) {
@@ -84,7 +94,11 @@ class OpenALSound implements Sound {
 				this.eos = true;
 			}
 		} else {
-			length = this.input.read(dst);
+			try {
+				length = this.input.read(dst);
+			} catch (ClosedChannelException e) {
+				return 0;
+			}
 		}
 		
 		return length;
@@ -152,33 +166,6 @@ class OpenALSound implements Sound {
 	}
 
 	@Override
-	public int getSampleRate() {
-		return this.sampleRate;
-	}
-
-	@Override
-	public int getChannels() {
-		return this.channels;
-	}
-
-	@Override
-	public int getBits() {
-		return this.bits;
-	}
-	
-	public void reset() {
-		if(this.input != null) {
-			this.input.reset();
-		} 
-		
-		if(this.data != null) {
-			this.data.position(0);
-		}
-
-		this.eos = false;
-	}
-
-	@Override
 	public void setLooping(boolean looping) {
 		this.isLooping = looping;
 	}
@@ -221,6 +208,22 @@ class OpenALSound implements Sound {
 		return this.eos;
 	}
 
+	public void reset() {
+		if(this.input != null) {
+			try {
+				this.input.position(0);
+			} catch (ClosedChannelException e) {
+				this.input = null;
+			}
+		} 
+		
+		if(this.data != null) {
+			this.data.position(0);
+		}
+
+		this.eos = false;
+	}
+
 	@Override
 	public boolean seek(int position) {
 		if(this.data != null) {
@@ -233,9 +236,31 @@ class OpenALSound implements Sound {
 		}
 
 		if(this.input != null) {
-			return this.input.seek(position);
+			try {
+				this.input.position(position);
+				
+				return this.input.position() == position;
+			} catch (ClosedChannelException e) {
+				return false;
+			}
 		}
 		
 		return false;
 	}
+
+	@Override
+	public int getSampleRate() {
+		return this.sampleRate;
+	}
+
+	@Override
+	public int getChannels() {
+		return this.channels;
+	}
+
+	@Override
+	public int getBits() {
+		return this.bits;
+	}
+	
 }
