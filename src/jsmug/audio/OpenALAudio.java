@@ -118,12 +118,6 @@ public class OpenALAudio implements Audio {
 	
 	public Sound newSoundStream(PCMFloatChannel channel) {
 		OpenALSound sound = new OpenALSound(channel);
-		try {
-			System.out.println("SIZE: "+channel.size());
-		} catch (ClosedChannelException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
 		this.sounds.add(sound);
 		return sound;
 	}
@@ -213,8 +207,8 @@ public class OpenALAudio implements Audio {
 	private void playSound(OpenALSound sound) {
 		int source = sound.getSource();
 		if(source != 0) {
-			AL10.alSourcef(source, AL10.AL_PITCH, 1.0f);
-			AL10.alSourcef(source, AL10.AL_GAIN, sound.getVolume());
+			AL10.alSourcef(source, AL10.AL_PITCH, (float)sound.getPitch());
+			AL10.alSourcef(source, AL10.AL_GAIN, (float)sound.getVolume());
 			AL10.alSource(source, AL10.AL_POSITION, this.listenerPosition);
 			AL10.alSource(source, AL10.AL_VELOCITY, this.listenerPosition);
 			AL10.alSourcePlay(source);
@@ -255,6 +249,12 @@ public class OpenALAudio implements Audio {
 			sound.setSource(source);
 		}
 		
+		// Update volume for this sound
+		if(sound.isPlaying()) {
+			AL10.alSourcef(source, AL10.AL_GAIN, (float)sound.getVolume());
+			AL10.alSourcef(source, AL10.AL_PITCH, (float)sound.getPitch());
+		}
+		
 		if(sound.isPlaying() && sound.isStream()) {
 			int state = AL10.alGetSourcei(source, AL10.AL_SOURCE_STATE);
 			int queued = AL10.alGetSourcei(source, AL10.AL_BUFFERS_QUEUED);
@@ -269,7 +269,7 @@ public class OpenALAudio implements Audio {
 			}
 			
 			// Make sure we have 3 buffers on a stream
-			if(queued < 20) {
+			if(queued < 3) {
 				for(int i=0; i<3-queued; i++) {
 					int buffer = this.createBuffer();
 					int length = this.fillBuffer(buffer, sound);
@@ -282,7 +282,7 @@ public class OpenALAudio implements Audio {
 			}
 			
 			// Refill processed buffers
-			if(processed > 0) {
+			while(processed > 0) {
 				int buffer = AL10.alSourceUnqueueBuffers(source);
 				int length = this.fillBuffer(buffer, sound);
 
@@ -290,6 +290,8 @@ public class OpenALAudio implements Audio {
 				if(length > 0) {
 					AL10.alSourceQueueBuffers(source, buffer);
 				}
+				
+				processed--;
 			}
 			
 			// If the sound is not playing, play it

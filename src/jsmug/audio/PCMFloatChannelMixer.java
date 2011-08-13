@@ -8,10 +8,22 @@ import java.util.List;
 import org.lwjgl.BufferUtils;
 
 public class PCMFloatChannelMixer implements PCMFloatChannel {
+	private class VolumeFader {
+		public long currentSample = 0;
+		public long endSample = 0;
+		public double fromVolume = 0.0;
+		public double toVolume = 0.0;
+		
+		public VolumeFader(double fromVolume, double toVolume) {
+			this.fromVolume = fromVolume;
+			this.toVolume = toVolume;
+		}
+	}
+	
 	private List<PCMFloatChannel> inputChannels = null;
+	private List<VolumeFader> inputVolumes = null;
 	private int sampleRate = 0;
 	private int channels = 0;
-	private float volume;
 	
 	private long sampleCount = 0;
 	
@@ -21,17 +33,50 @@ public class PCMFloatChannelMixer implements PCMFloatChannel {
 
 	public PCMFloatChannelMixer(int sampleRate, int channels) {
 		this.inputChannels = new LinkedList<PCMFloatChannel>();
+		this.inputVolumes = new LinkedList<VolumeFader>();
 		this.sampleRate = sampleRate;
 		this.channels = channels;
 		this.mixerBuffer = BufferUtils.createFloatBuffer(4096);
 	}
 	
-	public boolean add(PCMFloatChannel channel) {
+	public boolean add(PCMFloatChannel channel, double volume) {
+		this.inputVolumes.add(new VolumeFader(volume, volume));
+		
 		return this.inputChannels.add(channel);
 	}
 	
 	public boolean remove(PCMFloatChannel channel) {
 		return this.inputChannels.remove(channel);
+	}
+
+	public void fadeIn(int channel, double duration) {
+		VolumeFader fader = this.inputVolumes.get(channel);
+		
+		fader.toVolume = 1.0;
+		fader.currentSample = 0;
+		fader.endSample = (long)((double)this.getSampleRate()*duration);
+	}
+	
+	public void fadeOut(int channel, double duration) {
+		VolumeFader fader = this.inputVolumes.get(channel);
+		
+		fader.toVolume = 0.0;
+		fader.currentSample = 0;
+		fader.endSample = (long)((double)this.getSampleRate()*duration);
+	}
+	
+	public void fadeTo(int channel, double duration, double volume) {
+		VolumeFader fader = this.inputVolumes.get(channel);
+		
+		fader.fromVolume = fader.toVolume;
+		fader.toVolume = volume;
+		fader.currentSample = 0;
+		fader.endSample = (long)((double)this.getSampleRate()*duration);
+	}
+	
+	public void setVolume(int channel, double volume) {
+		this.fadeTo(channel, 0.0, volume);
+		this.fadeTo(channel, 0.0, volume);
 	}
 	
 	@Override
@@ -72,12 +117,12 @@ public class PCMFloatChannelMixer implements PCMFloatChannel {
 	}
 
 	@Override
-	public long position() throws ClosedChannelException {
+	public long position() {
 		return this.sampleCount;
 	}
 
 	@Override
-	public PCMFloatChannel position(long position) throws ClosedChannelException {
+	public PCMFloatChannel position(long position) {
 		for(PCMFloatChannel channel : this.inputChannels) {
 			if(channel.isOpen()) {
 				channel.position(position);
@@ -88,12 +133,12 @@ public class PCMFloatChannelMixer implements PCMFloatChannel {
 	}
 
 	@Override
-	public long read(FloatBuffer dst) throws ClosedChannelException {
+	public long read(FloatBuffer dst) {
 		return this.read(new FloatBuffer[]{dst}, 0, 1);
 	}
 
 	@Override
-	public long read(FloatBuffer dst, long position) throws ClosedChannelException {
+	public long read(FloatBuffer dst, long position) {
 		long oldPosition = this.sampleCount;
 		
 		this.position(this.sampleCount);
@@ -106,13 +151,13 @@ public class PCMFloatChannelMixer implements PCMFloatChannel {
 	}
 
 	@Override
-	public long read(FloatBuffer[] dsts) throws ClosedChannelException {
+	public long read(FloatBuffer[] dsts) {
 		return this.read(dsts, 0, dsts.length);
 	}
 
 	
 	@Override
-	public long read(FloatBuffer[] dsts, int offset, int length) throws ClosedChannelException {
+	public long read(FloatBuffer[] dsts, int offset, int length) {
 		int currentDst = offset;
 		long sampleCountStart = this.sampleCount;
 		
@@ -121,19 +166,52 @@ public class PCMFloatChannelMixer implements PCMFloatChannel {
 		}
 		
 		while(!this.endOfStream && currentDst < length+offset) {
-			this.sampleCount += this.inputChannels.get(0).read(dsts[currentDst]);
-			
 			if(dsts[currentDst].capacity() > this.mixerBuffer.capacity()) {
 				this.mixerBuffer = BufferUtils.createFloatBuffer(dsts[currentDst].capacity());
 			}
 			
 			this.mixerBuffer.limit(dsts[currentDst].capacity());
 			
-			for(int i=1; i<this.inputChannels.size(); i++) {
+			for(int i=0; i<this.inputChannels.size(); i++) {
 				this.mixerBuffer.position(0);
-				this.inputChannels.get(i).read(this.mixerBuffer);
-				PCMUtils.mixBuffers(this.mixerBuffer, dsts[currentDst]);
+				
+				// If any channel returns end of file, consider entire mixer end of file
+				if(this.inputChannels.get(i).read(this.mixerBuffer) == -1) {
+					dsts[currentDst].position(0);
+					return -1;
+				}
+				
+				VolumeFader fader = this.inputVolumes.get(i);
+				double fromVolume = fader.toVolume;
+				double toVolume = fader.toVolume;
+				long volumeSamples = 0;
+				
+				if(fader.currentSample < fader.endSample) {
+					volumeSamples = fader.endSample - fader.currentSample;
+					fromVolume = (fader.toVolume - fader.fromVolume) * ((double)fader.currentSample / (double)fader.endSample) + fader.fromVolume;
+					toVolume = fader.toVolume;
+				}
+
+				this.mixerBuffer.flip();
+				
+				if(i == 0) {
+					this.sampleCount += this.mixerBuffer.limit();
+					dsts[currentDst].limit(this.mixerBuffer.limit());
+					PCMUtils.copyBuffer(this.mixerBuffer, dsts[currentDst], fromVolume, toVolume, volumeSamples, this.channels);
+				} else {
+					if(toVolume >= 0.01 || fromVolume >= 0.01) {
+						PCMUtils.mixBuffers(this.mixerBuffer, dsts[currentDst], fromVolume, toVolume, volumeSamples, this.channels);
+					}
+				}
+				
+				if(fader.currentSample < fader.endSample) {
+					fader.currentSample += this.mixerBuffer.limit();
+				}
 			}
+			
+			// Compress buffer to avoid distortion
+			PCMUtils.compressBufferRMS(dsts[currentDst]);
+			dsts[currentDst].position(dsts[currentDst].limit());
 			
 			currentDst++;
 		}
@@ -143,7 +221,7 @@ public class PCMFloatChannelMixer implements PCMFloatChannel {
 
 	
 	@Override
-	public long size() throws ClosedChannelException {
+	public long size() {
 		long size = 0;
 		
 		for(PCMFloatChannel channel : this.inputChannels) {
@@ -157,15 +235,5 @@ public class PCMFloatChannelMixer implements PCMFloatChannel {
 		}
 
 		return size;
-	}
-
-	@Override
-	public float getVolume() {
-		return this.volume;
-	}
-
-	@Override
-	public void setVolume(float volume) {
-		this.volume = volume;
 	}
 }

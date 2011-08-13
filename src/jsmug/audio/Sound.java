@@ -1,10 +1,12 @@
 package jsmug.audio;
 
-public interface Sound extends PCMInfo {
+public interface Sound extends PCMInfo, Adjustable {
 	public void play();
 	public void pause();
 	public void resume();
 	public void stop();
+
+	public void setLooping(boolean looping);
 	
 	public boolean isStream();
 	public boolean isLooping();
@@ -12,9 +14,5 @@ public interface Sound extends PCMInfo {
 	public boolean isPaused();
 	public boolean isStopped();
 	
-	public float getVolume();
-	public boolean seek(int position);
-	
-	public void setLooping(boolean looping);
-	public void setVolume(float volume);
+	public boolean seek(int position);	
 }

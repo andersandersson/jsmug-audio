@@ -14,11 +14,13 @@ class OpenALSound implements Sound {
 	boolean isStream = true;
 	boolean isLooping = false;
 	boolean eos = true;
+	
 	int source = 0;
 	int stopSource = 0;
 	int buffer = 0;
 	
-	float volume = 1.0f;
+	double volume = 1.0f;
+	double pitch = 1.0f;
 
 	int sampleRate = 0;
 	int bits = 0;
@@ -51,19 +53,11 @@ class OpenALSound implements Sound {
 		FloatBuffer tmp2;
 		
 		// Allocate tmp buffer for about 10s of data
-		try {
-			while(input.read(tmp) > 0) {
-				tmp2 = BufferUtils.createFloatBuffer(tmp.limit()+bufferSize);
-				tmp.flip();
-				tmp2.put(tmp);
-				tmp = tmp2;
-			}
-		}
-		catch(ClosedChannelException e) {
-			e.printStackTrace();
-			this.input = null;
-			this.data = null;
-			return;
+		while(input.read(tmp) > 0) {
+			tmp2 = BufferUtils.createFloatBuffer(tmp.limit()+bufferSize);
+			tmp.flip();
+			tmp2.put(tmp);
+			tmp = tmp2;
 		}
 		
 		// Force stream mode if we don't fit into one buffer
@@ -86,7 +80,7 @@ class OpenALSound implements Sound {
 			}
 			
 			while(dst.hasRemaining() && this.data.hasRemaining()) {
-				dst.put(this.data.get());
+				dst.put(this.data.get()*((float)this.volume));
 				length += 1;
 			}
 			
@@ -94,11 +88,7 @@ class OpenALSound implements Sound {
 				this.eos = true;
 			}
 		} else {
-			try {
-				length = this.input.read(dst);
-			} catch (ClosedChannelException e) {
-				return 0;
-			}
+			length = this.input.read(dst);
 		}
 		
 		return length;
@@ -171,8 +161,13 @@ class OpenALSound implements Sound {
 	}
 
 	@Override
-	public void setVolume(float volume) {
+	public void setVolume(double volume) {
 		this.volume = volume;
+	}
+
+	@Override
+	public double getVolume() {
+		return this.volume;
 	}
 
 	@Override
@@ -190,11 +185,6 @@ class OpenALSound implements Sound {
 	}
 	
 	@Override
-	public float getVolume() {
-		return this.volume;
-	}
-
-	@Override
 	public boolean isPaused() {
 		return this.isPaused;
 	}
@@ -210,11 +200,7 @@ class OpenALSound implements Sound {
 
 	public void reset() {
 		if(this.input != null) {
-			try {
-				this.input.position(0);
-			} catch (ClosedChannelException e) {
-				this.input = null;
-			}
+			this.input.position(0);
 		} 
 		
 		if(this.data != null) {
@@ -236,13 +222,9 @@ class OpenALSound implements Sound {
 		}
 
 		if(this.input != null) {
-			try {
-				this.input.position(position);
-				
-				return this.input.position() == position;
-			} catch (ClosedChannelException e) {
-				return false;
-			}
+			this.input.position(position);
+			
+			return this.input.position() == position;
 		}
 		
 		return false;
@@ -262,5 +244,14 @@ class OpenALSound implements Sound {
 	public int getBits() {
 		return this.bits;
 	}
-	
+
+	@Override
+	public void setPitch(double pitch) {
+		this.pitch = pitch;
+	}
+
+	@Override
+	public double getPitch() {
+		return this.pitch;
+	}
 }

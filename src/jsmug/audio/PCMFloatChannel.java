@@ -8,13 +8,13 @@ import java.nio.channels.ClosedChannelException;
 public interface PCMFloatChannel extends Channel, PCMInfo {
 	public void close();
 
-	public long position() throws ClosedChannelException;
-	public PCMFloatChannel position(long position) throws ClosedChannelException;
+	public long position();
+	public PCMFloatChannel position(long position);
 
-	public long read(FloatBuffer dst) throws ClosedChannelException;
-	public long read(FloatBuffer dst, long position) throws ClosedChannelException;
-	public long read(FloatBuffer dsts[]) throws ClosedChannelException;
-	public long read(FloatBuffer dsts[], int offset, int length) throws ClosedChannelException;
+	public long read(FloatBuffer dst);
+	public long read(FloatBuffer dst, long position);
+	public long read(FloatBuffer dsts[]);
+	public long read(FloatBuffer dsts[], int offset, int length);
 	
-	public long size() throws ClosedChannelException;
+	public long size();
 }

@@ -81,29 +81,37 @@ public class AudioTest {
 		}
 		
 		PCMFloatChannelMixer mixer = new PCMFloatChannelMixer(c1.getSampleRate(), c2.getChannels());
-		mixer.add(c1);
-		mixer.add(c2);
-		mixer.add(c3);
-		mixer.add(c4);
-		mixer.add(c5);
-		mixer.add(c6);
-		mixer.add(c7);
-		mixer.add(c8);
-		try {
-			Locale.setDefault(Locale.US);
-			FileWriter writer = new FileWriter("test.data");
-			FloatBuffer buf = BufferUtils.createFloatBuffer(1000);
-			mixer.read(buf);
-			
-			for(int i=0; i<1000; i++) { 
-				writer.write(String.format("%.3f\n", buf.get(i)));
-			}
-			
-			writer.close();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+		mixer.add(c1, 1.0);
+		mixer.add(c2, 1.0);
+		mixer.add(c3, 1.0);
+		mixer.add(c4, 1.0);
+		mixer.add(c5, 1.0);
+		mixer.add(c6, 1.0);
+		mixer.add(c7, 1.0);
+		mixer.add(c8, 1.0);
+//		mixer.fadeOut(0, 3.0);
+//		mixer.fadeOut(1, 3.0);
+//		mixer.fadeOut(2, 3.0);
+//		mixer.fadeOut(3, 3.0);
+//		mixer.fadeOut(5, 3.0);
+//		mixer.fadeOut(6, 3.0);
+//		mixer.fadeOut(7, 3.0);
+		
+//		try {
+//			Locale.setDefault(Locale.US);
+//			FileWriter writer = new FileWriter("test.data");
+//			FloatBuffer buf = BufferUtils.createFloatBuffer(10000);
+//			mixer.read(buf);
+//			
+//			for(int i=0; i<10000; i++) { 
+//				writer.write(String.format("%.3f\n", buf.get(i)));
+//			}
+//			
+//			writer.close();
+//		} catch (IOException e) {
+//			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//		}
 		
 		
 		//Sound sound = audio.newSoundStream(mixer);
@@ -111,9 +119,18 @@ public class AudioTest {
 		sound.setLooping(true);
 		sound.play();
 
+		CueManager cueManager = new CueManager();
+		CueSheet cueSheet = new CueSheet();
+		cueSheet.addCue(0.0, 5.0, new DoubleCue(sound, "pitch", 0.7, 1.1), new Functions.SinSquare(1.0, 0.5));
+		cueSheet.addCue(0.0, 5.0, new DoubleCue(sound, "volume", 0.4, 1.0), new Functions.SinSquare(1.0, 2));
+		cueSheet.setLoopMode(CueSheet.LoopMode.NORMAL);
+		cueManager.addCueSheet(cueSheet);
+
+		int fps = 60;
 		while (!Display.isCloseRequested()) {
-			audio.update(0.0);
-			Display.sync(30);
+			cueManager.update(1.0/fps);
+			audio.update(1.0/fps);
+			Display.sync(fps);
 		    Display.update();
 		}
 			

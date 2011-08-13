@@ -47,7 +47,6 @@ public class OggFloatChannel implements PCMFloatChannel {
     
 	private int channels = 0;
 	private int sampleRate = 0;
-	private float volume = 1.0f;
 	
 	private long sampleCount = 0;
 	private long size = 0;
@@ -319,7 +318,7 @@ public class OggFloatChannel implements PCMFloatChannel {
         	// Read pcm samples
         	for(int i=0; i<range; i++) {
         		for(int j=0; j<this.channels; j++) {
-        			dst.put(this.pcmInfo[0][j][this.pcmIndex[j] + i]*this.volume);
+        			dst.put(this.pcmInfo[0][j][this.pcmIndex[j] + i]);
         		}
         	}
         	
@@ -328,27 +327,31 @@ public class OggFloatChannel implements PCMFloatChannel {
         }        
 	}
 
-	private void assertChannel() throws ClosedChannelException {
+	private boolean assertChannel() {
 		if(!this.isOpen) {
-			throw new ClosedChannelException();
+			return false;
 		}
 		
 		if(!this.initialized) {
 			this.init();
 		}
+		
+		return true;
 	}
 	
 
 	@Override
-	public long position() throws ClosedChannelException {
-		this.assertChannel();
+	public long position() {
+		if(!this.assertChannel()) { return -1; }
 		
 		return this.sampleCount;
 	}
 
 
 	@Override
-	public PCMFloatChannel position(long position) throws ClosedChannelException {
+	public PCMFloatChannel position(long position) {
+		if(!this.assertChannel()) { return null; }
+
 		if(position < 0) {
 			throw new IllegalArgumentException("Position must be positive, got: " + position);
 		}
@@ -403,24 +406,24 @@ public class OggFloatChannel implements PCMFloatChannel {
 
 	
 	// Read next part from stream to dst
-	public long read(FloatBuffer dst) throws ClosedChannelException {		
-		this.assertChannel();
+	public long read(FloatBuffer dst) {		
+		if(!this.assertChannel()) { return -2; }
 		
 		return this.read(new FloatBuffer[]{dst}, 0, 1);
 	}
 
 	
 	@Override
-	public long read(FloatBuffer[] dsts) throws ClosedChannelException {
-		this.assertChannel();
+	public long read(FloatBuffer[] dsts) {
+		if(!this.assertChannel()) { return -2; }
 		
 		return this.read(dsts, 0, dsts.length);
 	}
 
 
 	@Override
-	public long read(FloatBuffer dst, long position) throws ClosedChannelException {
-		this.assertChannel();
+	public long read(FloatBuffer dst, long position) {
+		if(!this.assertChannel()) { return -2; }
 		
 		// Save current position
 		long oldPosition = this.sampleCount;
@@ -439,8 +442,8 @@ public class OggFloatChannel implements PCMFloatChannel {
 
 
 	@Override
-	public long read(FloatBuffer[] dsts, int offset, int length) throws ClosedChannelException {
-		this.assertChannel();
+	public long read(FloatBuffer[] dsts, int offset, int length) {
+		if(!this.assertChannel()) { return -2; }
 		
 		// If we have reached end of stream, return -1
 		if(this.endOfStream) {
@@ -511,8 +514,8 @@ public class OggFloatChannel implements PCMFloatChannel {
 
 
 	@Override
-	public long size() throws ClosedChannelException {
-		this.assertChannel();
+	public long size() {
+		if(!this.assertChannel()) { return -2; }
 		
 		// If we have calculated size before, use that value
 		if(this.size > 0) {
@@ -565,16 +568,4 @@ public class OggFloatChannel implements PCMFloatChannel {
 
 		return 16;
 	}
-
-
-	@Override
-	public float getVolume() {
-		return this.volume;
-	}
-
-
-	@Override
-	public void setVolume(float volume) {
-		this.volume = volume;
-	}	
 }
