@@ -1,11 +1,15 @@
 package jsmug.audio;
 
 public interface Adjustable {
-	@CueTarget("volume")
+	@Attribute(value="volume", access="set")
 	public void setVolume(double volume);
+
+	@Attribute(value="volume", access="get")
 	public double getVolume();
 
-	@CueTarget("pitch")
+	@Attribute(value="pitch", access="set")
 	public void setPitch(double pitch);	
+
+	@Attribute(value="pitch", access="get")
 	public double getPitch();
 }

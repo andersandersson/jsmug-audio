@@ -22,6 +22,8 @@ public class CueSheet {
 		}
 	}
 	
+	private Object target = null;
+	
 	private double currentTime = 0.0;
 	private double timeDirection = 1.0;
 	private double lastEntryEnd = 0.0;
@@ -58,28 +60,42 @@ public class CueSheet {
 		}
 		
 		for(CueSheetEntry entry : this.cues) {
-			if(entry.start <= this.currentTime && this.currentTime <= entry.end) {
-				active = true;
-			} 
-			
-			if(entry.start != entry.end) {
-				if(this.currentTime <= entry.start) {
-					percentage = 0.0;
-				} 
-				else if(this.currentTime >= entry.end) {
-					percentage = 1.0;
-				} else {
-					percentage = (this.currentTime - entry.start) / (entry.end - entry.start); 
+			if(this.timeDirection < 0) {
+				// If we pass this entrys start, make sure it affects the result 
+				if(entry.start > this.currentTime) {
+					if(entry.timeTransform != null) {
+						entry.cue.eval(entry.timeTransform.eval(0.0));
+					} else {
+						entry.cue.eval(0.0);
+					}
 				}
 			} else {
-				percentage = 1.0;
+				// If we pass this entrys end, make sure it affects the result 
+				if(entry.end < this.currentTime) {
+					if(entry.timeTransform != null) {
+						entry.cue.eval(entry.timeTransform.eval(1.0));
+					} else {
+						entry.cue.eval(1.0);
+					}
+				}
 			}
 			
-			if(entry.timeTransform != null) {
-				percentage = entry.timeTransform.eval(percentage); 
+			// If we are in between this entrys times
+			if(entry.start <= this.currentTime && this.currentTime <= entry.end) {
+				if(entry.end != entry.start) {
+					percentage = (this.currentTime - entry.start) / (entry.end - entry.start);
+				} else {
+					percentage = 1.0;
+				}
+				
+				if(entry.timeTransform != null) {
+					entry.cue.eval(entry.timeTransform.eval(percentage));
+				} else {
+					entry.cue.eval(percentage);
+				}
+				
+				active = true;
 			}
-			
-			entry.cue.update(percentage);
 		}
 		
 		return !active;
@@ -89,16 +105,24 @@ public class CueSheet {
 		return this.seek(this.currentTime + deltatime*this.timeDirection);
 	}
 	
- 	public void addCue(double start, double end, Cue cue) {
- 		this.addCue(start, end, cue, null);
-	}
- 	
- 	public void addCue(double start, double end, Cue cue, Function<Double,Double> timeTransform) {
+ 	public<T> void addCue(double start, double end, Cue<T> cue, Function<Double,Double> timeTransform) {
  		if(end > this.lastEntryEnd) {
  			this.lastEntryEnd = end;
  		}
  		
+ 		cue.setTarget(this.target);
+ 		
  		this.cues.add(new CueSheetEntry(cue, start, end, timeTransform));
+ 	}
+ 	
+ 	public<T> void addCue(double start, double end, Cue<T> cue) {
+ 		if(end > this.lastEntryEnd) {
+ 			this.lastEntryEnd = end;
+ 		}
+ 		
+ 		cue.setTarget(this.target);
+ 		
+ 		this.cues.add(new CueSheetEntry(cue, start, end, null));
  	}
  	
  	public void setLoopMode(LoopMode mode) {
@@ -107,5 +131,11 @@ public class CueSheet {
 
  	public LoopMode getLoopMode() {
  		return this.loopMode;
+ 	}
+ 	
+ 	public void setTarget(Object target) {
+ 		for(CueSheetEntry entry : this.cues) {
+ 			entry.cue.setTarget(target);
+ 		}
  	}
 }

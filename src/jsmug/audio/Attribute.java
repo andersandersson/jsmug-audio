@@ -8,6 +8,10 @@ import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ ElementType.METHOD })
-public @interface CueTarget {
+public @interface Attribute {
 	String value();
+	String access() default "get";
+	String type() default "double";
+	String min() default "";
+	String max() default "";
 }

@@ -32,4 +32,10 @@ public class Functions {
 			return this.amplitude * Math.sin(frequency*2.0*Math.PI*x) * Math.sin(frequency*2.0*Math.PI*x);
 		}
 	}
+	
+	public static class InterpolateDouble implements Continuous<Double> {
+		public Double eval(Double from, Double to, double percentage) {
+			return (Double)(percentage*(to - from) + from);
+		}
+	}
 }
