@@ -1,7 +1,6 @@
 package jsmug.audio;
 
 import java.nio.FloatBuffer;
-import java.nio.channels.ClosedChannelException;
 import java.util.LinkedList;
 import java.util.List;
 

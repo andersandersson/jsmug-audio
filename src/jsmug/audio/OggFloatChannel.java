@@ -1,17 +1,9 @@
 package jsmug.audio;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.Writer;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
-import java.nio.channels.Channels;
-import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
-import java.util.Locale;
 
 import org.lwjgl.BufferUtils;
 

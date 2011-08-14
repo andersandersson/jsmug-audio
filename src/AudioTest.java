@@ -122,11 +122,14 @@ public class AudioTest {
 		CueManager cueManager = new CueManager();
 		CueSheet cueSheet = new CueSheet();
 		//cueSheet.addCue(0.0, 5.0, new DoubleCue(sound, "pitch", 0.7, 1.1), new Functions.SinSquare(1.0, 0.5));
-		cueSheet.addCue(0.0, 3.0, new Cue<Double>("pitch", 0.7, 1.1, new Functions.InterpolateDouble()));
-		cueSheet.addCue(0.0, 3.0, new Cue<Double>("volume", 0.4, 1.0, new Functions.InterpolateDouble()));
+		cueSheet.addCue(0.0, 3.0, new Cue(sound, "pitch", 0.7, 1.1, new Functions.InterpolateDouble()));
+		cueSheet.addCue(3.0, 6.0, new Cue(sound, "pitch", 1.1, 1.1, new Functions.InterpolateDouble()));
+		cueSheet.addCue(6.0, 7.0, new Cue(sound, "pitch", 1.1, 0.1, new Functions.InterpolateDouble()));
+		cueSheet.addCue(0.0, 7.0, new Cue(sound, "volume", 0.1, 1.0, new Functions.InterpolateDouble(), new Functions.SinSquare(1.0, 1.0)));
+		
+		//cueSheet.addCue(0.0, 3.0, new Cue<Double>("volume", 0.4, 1.0, new Functions.InterpolateDouble()));
 		//cueSheet.addCue(0.0, 10.0, new Cue<Double>("volume", 0.4, 1.0, new Functions.InterpolateDouble()), new Functions.SinSquare(1.0, 2));
-		cueSheet.setLoopMode(CueSheet.LoopMode.PINGPONG);
-		cueSheet.setTarget(sound);
+		cueSheet.setLoopMode(CueSheet.LoopMode.NORMAL);
 		cueManager.addCueSheet(cueSheet);
 
 		int fps = 60;

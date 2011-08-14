@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
-import java.nio.channels.ClosedChannelException;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -323,7 +322,7 @@ public class OpenALAudio implements Audio {
 				if(buffer == 0) {
 					buffer = this.createBuffer();
 					sound.setBuffer(buffer);
-					int length = this.fillBuffer(buffer, sound);
+					this.fillBuffer(buffer, sound);
 				}
 				
 				// Connect buffer to source

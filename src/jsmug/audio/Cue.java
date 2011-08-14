@@ -3,15 +3,17 @@ package jsmug.audio;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
-public class Cue<T> {
-	protected Object target = null;
-	protected Method method = null;
-	protected String name = "";
-	protected T startValue = null;
-	protected T endValue = null;
-	protected Continuous<T> interpolator = null;
+public class Cue {
+	private Object target = null;
+	private Method method = null;
 	
-	private Method findAnnotatedMethod(Class<?> parent) {
+	private Object startValue = null;
+	private Object endValue = null;
+	
+	private Interpolator interpolator = null;
+	private Function<Double,Double> timeTransform = null;
+	
+	private Method findAnnotatedMethod(Class<?> parent, String name) {
 		Method method = null;
 		
 		if(parent == null) {
@@ -20,7 +22,7 @@ public class Cue<T> {
 		
 		for(Method m : parent.getMethods()) {
 			if(m.isAnnotationPresent(Attribute.class)) {
-				if(m.getAnnotation(Attribute.class).value().equals(this.name) &&
+				if(m.getAnnotation(Attribute.class).value().equals(name) &&
 				   m.getAnnotation(Attribute.class).access().equals("set")) {
 					return m;
 				}
@@ -28,41 +30,51 @@ public class Cue<T> {
 		}
 
 		for(Class<?> i : parent.getInterfaces()) {
-			method = this.findAnnotatedMethod(i);
+			method = this.findAnnotatedMethod(i, name);
 			
 			if(method != null) {
 				return method;
 			}
 		}
 		
-		return this.findAnnotatedMethod(parent.getSuperclass());
+		return this.findAnnotatedMethod(parent.getSuperclass(), name);
 	}
 	
-	public Cue(String name, T startValue, T endValue, Continuous<T> interpolator) {
-		this.name = name;
+	public Cue(Object target, String name, Object startValue, Object endValue, Interpolator interpolator) {
+		this.target = target;
+		this.method = this.findAnnotatedMethod(target.getClass(), name);
 		this.startValue = startValue;
 		this.endValue = endValue;
 		this.interpolator = interpolator;
 	}
 	
-	public void setTarget(Object target) {
+	public Cue(Object target, String name, Object startValue, Object endValue, Interpolator interpolator, Function<Double,Double> timeTransform) {
 		this.target = target;
-		
-		if(target != null) {
-			this.method = this.findAnnotatedMethod(target.getClass());
-		}
+		this.method = this.findAnnotatedMethod(target.getClass(), name);
+		this.startValue = startValue;
+		this.endValue = endValue;
+		this.interpolator = interpolator;
+		this.timeTransform = timeTransform;
 	}
 	
 	public Object getTarget() {
 		return this.target;
 	}
 
+	public Method getMethod() {
+		return this.method;
+	}
+	
 	public void eval(double percentage) {
 		if(this.method == null) {
 			return;
 		}
 		
 		try {
+			if(this.timeTransform != null) {
+				percentage = this.timeTransform.eval(percentage);
+			}
+			
 			this.method.invoke(this.target, this.interpolator.eval(this.startValue, this.endValue, percentage));
 		} catch (IllegalArgumentException e) {
 			e.printStackTrace();

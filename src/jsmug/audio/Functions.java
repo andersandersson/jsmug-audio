@@ -33,9 +33,9 @@ public class Functions {
 		}
 	}
 	
-	public static class InterpolateDouble implements Continuous<Double> {
-		public Double eval(Double from, Double to, double percentage) {
-			return (Double)(percentage*(to - from) + from);
+	public static class InterpolateDouble implements Interpolator {
+		public Object eval(Object from, Object to, double percentage) {
+			return (Double)(percentage*((Double)to - (Double)from) + (Double)from);
 		}
 	}
 }

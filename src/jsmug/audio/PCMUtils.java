@@ -3,7 +3,6 @@ package jsmug.audio;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
-import java.nio.channels.ClosedChannelException;
 
 public final class PCMUtils {
 	static private final boolean bigEndian = ByteOrder.nativeOrder().equals(ByteOrder.BIG_ENDIAN);

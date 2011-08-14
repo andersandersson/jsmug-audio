@@ -1,9 +1,7 @@
 package jsmug.audio;
 
-import java.io.IOException;
 import java.nio.FloatBuffer;
 import java.nio.channels.Channel;
-import java.nio.channels.ClosedChannelException;
 
 public interface PCMFloatChannel extends Channel, PCMInfo {
 	public void close();

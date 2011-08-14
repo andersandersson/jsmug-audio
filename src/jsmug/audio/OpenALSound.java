@@ -1,11 +1,7 @@
 package jsmug.audio;
 
-import java.io.IOException;
 import java.nio.FloatBuffer;
-import java.nio.channels.ClosedChannelException;
-
 import org.lwjgl.BufferUtils;
-import org.lwjgl.openal.AL10;
 
 class OpenALSound implements Sound {
 	boolean isPlaying = false;
