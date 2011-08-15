@@ -162,14 +162,11 @@ public class OggFloatChannel implements PCMFloatChannel {
 		
 		if(index >= 0) {
 			this.buffer = ByteBuffer.wrap(this.joggSyncState.data, index, this.bufferSize);
-		
 			try {
-				count = this.input.read(this.buffer);
+				count = (int) this.input.read(this.buffer);
+			} catch (IOException e) {
+				e.printStackTrace();
 			}
-            catch(IOException exception) {
-            	exception.printStackTrace();
-            	return;
-            }
 		} else {
 			count = 0;
 		}
@@ -359,7 +356,6 @@ public class OggFloatChannel implements PCMFloatChannel {
 			this.input.position(0);
 		} catch (IOException e) {
 			e.printStackTrace();
-			return this;
 		}
 		
 		this.joggSyncState.reset();

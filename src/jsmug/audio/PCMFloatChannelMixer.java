@@ -48,9 +48,14 @@ public class PCMFloatChannelMixer implements PCMFloatChannel {
 		return this.inputChannels.remove(channel);
 	}
 
+	public int getInputChannels() {
+		return this.inputChannels.size();
+	}
+	
 	public void fadeIn(int channel, double duration) {
 		VolumeFader fader = this.inputVolumes.get(channel);
 		
+		fader.fromVolume = fader.toVolume;
 		fader.toVolume = 1.0;
 		fader.currentSample = 0;
 		fader.endSample = (long)((double)this.getSampleRate()*duration);
@@ -59,6 +64,7 @@ public class PCMFloatChannelMixer implements PCMFloatChannel {
 	public void fadeOut(int channel, double duration) {
 		VolumeFader fader = this.inputVolumes.get(channel);
 		
+		fader.fromVolume = fader.toVolume;
 		fader.toVolume = 0.0;
 		fader.currentSample = 0;
 		fader.endSample = (long)((double)this.getSampleRate()*duration);
@@ -76,6 +82,10 @@ public class PCMFloatChannelMixer implements PCMFloatChannel {
 	public void setVolume(int channel, double volume) {
 		this.fadeTo(channel, 0.0, volume);
 		this.fadeTo(channel, 0.0, volume);
+	}
+	
+	public double getVolume(int channel) {
+		return this.inputVolumes.get(channel).toVolume;
 	}
 	
 	@Override

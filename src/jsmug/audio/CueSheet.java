@@ -68,6 +68,7 @@ public class CueSheet {
 							percentage = 1.0;
 						}
 						
+						active = true;
 						cueSheetEntry.cue.eval(percentage);
 					}
 				}

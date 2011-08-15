@@ -1,6 +1,7 @@
 package jsmug.audio;
 
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
@@ -28,8 +29,13 @@ public class OpenALAudio implements Audio {
 	private List<OpenALSound> sounds;
 	
 	private IntBuffer sources;
+	private IntBuffer sourcesToPlay;
+	private IntBuffer sourcesToPause;
+	private IntBuffer sourcesToResume;
+	private IntBuffer sourcesToStop;
+	private IntBuffer sourcesInUse;
 	
-	private int soundBufferSize = 409600;
+	private int soundBufferSize = 40960;
 	private FloatBuffer soundFloatBuffer;
 	private ByteBuffer soundByteBuffer;
 	
@@ -45,9 +51,14 @@ public class OpenALAudio implements Audio {
 	
 	public boolean init() {
 		try {
-			AL.create();
-			this.context = ALC10.alcGetCurrentContext();
-			this.device = ALC10.alcGetContextsDevice(this.context);
+			this.context = AL.getContext();
+			
+			if(this.context == null) {
+				AL.create();
+				this.context = AL.getContext();
+			}
+			
+			this.device = AL.getDevice();
 			this.resetListener();
 
 			AL10.alGenSources(this.sources);
@@ -56,6 +67,15 @@ public class OpenALAudio implements Audio {
 				return false;
 			}
 			
+			this.sourcesToPlay = BufferUtils.createIntBuffer(this.sources.capacity());
+			this.sourcesToPause = BufferUtils.createIntBuffer(this.sources.capacity());
+			this.sourcesToResume = BufferUtils.createIntBuffer(this.sources.capacity());
+			this.sourcesToStop = BufferUtils.createIntBuffer(this.sources.capacity());
+			
+			this.sourcesInUse = BufferUtils.createIntBuffer(this.sources.capacity());
+			for(int i=0; i<this.sourcesInUse.capacity(); i++) {
+				this.sourcesInUse.put(i, -1);
+			}
 		} catch (LWJGLException e) {
 			e.printStackTrace();
 			return false;
@@ -86,14 +106,13 @@ public class OpenALAudio implements Audio {
 	}
 	
 	public Sound newSound(String filename) {
+		OggFloatChannel channel = null;
 		try {
-			FileInputStream input = new FileInputStream(filename);
-			OggFloatChannel channel  = new OggFloatChannel(input.getChannel());
-			return this.newSound(channel);
-		} catch (IOException e) {
+			channel = new OggFloatChannel(Files.internal(filename).getReadChannel());
+		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		}
-		return null;
+		return this.newSound(channel);
 	}
 	
 	public Sound newSound(PCMFloatChannel channel) {
@@ -104,14 +123,13 @@ public class OpenALAudio implements Audio {
 	
 	
 	public Sound newSoundStream(String filename) {
+		OggFloatChannel channel = null;
 		try {
-			FileInputStream input = new FileInputStream(filename);
-			OggFloatChannel channel = new OggFloatChannel(input.getChannel());
-			return this.newSoundStream(channel);
-		} catch (IOException e) {
+			channel = new OggFloatChannel(Files.internal(filename).getReadChannel());
+		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		}
-		return null;
+		return this.newSoundStream(channel);
 	}
 	
 	
@@ -126,6 +144,44 @@ public class OpenALAudio implements Audio {
 		for(OpenALSound s : this.sounds) {
 			this.updateSound(s, deltaTime);
 		}
+		
+		if(this.sourcesToPlay.position() > 0) {
+			this.sourcesToPlay.flip();
+			AL10.alSourcePlay(this.sourcesToPlay);
+			this.sourcesToPlay.clear();
+		}
+
+		if(this.sourcesToPause.position() > 0) {
+			this.sourcesToPause.flip();
+			AL10.alSourcePause(this.sourcesToPause);
+			this.sourcesToPause.clear();
+		}
+
+		if(this.sourcesToResume.position() > 0) {
+			this.sourcesToResume.flip();
+			
+			while(this.sourcesToStop.hasRemaining()) {
+				int source = this.sourcesToStop.get();
+				AL10.alSourcei(source, AL10.AL_SOURCE_STATE, AL10.AL_PLAYING);
+				this.freeSource(source);
+			}
+
+			this.sourcesToResume.clear();
+		}
+
+		if(this.sourcesToStop.position() > 0) {			
+			this.sourcesToStop.flip();
+			AL10.alSourceStop(this.sourcesToStop);
+			this.sourcesToStop.position(0);
+			
+			while(this.sourcesToStop.hasRemaining()) {
+				int source = this.sourcesToStop.get();
+				AL10.alSourcei(source, AL10.AL_BUFFER, 0);
+				this.freeSource(source);
+			}
+			
+			this.sourcesToStop.clear();
+		}
 	}
 	
 
@@ -139,22 +195,37 @@ public class OpenALAudio implements Audio {
 		AL10.alListener(AL10.AL_ORIENTATION, this.listenerOrientation);
 	}
 	
-	private int findFreeSource() {
+	private int claimSource() {
 		this.sources.position(0);
-		while(this.sources.hasRemaining()) {
-			int id = this.sources.get();
-			int state = AL10.alGetSourcei(id, AL10.AL_SOURCE_STATE);
-			
-			if (state != AL10.AL_PLAYING && state != AL10.AL_PAUSED) {
-				AL10.alSourceStop(id);
-				AL10.alSourcei(id, AL10.AL_BUFFER, 0);
-                return id;
+		for(int i=0; i<this.sources.limit(); i++) {
+			int source = this.sources.get(i);
+			if(this.sourcesInUse.get(i) == -1) {
+				int state = AL10.alGetSourcei(source, AL10.AL_SOURCE_STATE);
+				
+				if (state != AL10.AL_PLAYING && state != AL10.AL_PAUSED) {
+					AL10.alSourceStop(source);
+					AL10.alSourcei(source, AL10.AL_BUFFER, 0);
+					
+					this.sources.put(i, -1);
+					this.sourcesInUse.put(i, source);
+					
+	                return source;
+				}
 			}
 		}
 
 		return -1;
 	}
 	
+	private void freeSource(int source) {		
+		for(int i=0; i<this.sourcesInUse.limit(); i++) {
+			if(this.sourcesInUse.get(i) == source) {
+				this.sources.put(i, source);
+				this.sourcesInUse.put(i, -1);
+				break;
+			}
+		}
+	}
 
 	private int createBuffer() {
 		int id = AL10.alGenBuffers();
@@ -172,6 +243,7 @@ public class OpenALAudio implements Audio {
 				sound.reset();
 				this.soundFloatBuffer.clear();
 				sound.read(this.soundFloatBuffer);
+				System.out.println("Looping");
 			} else {
 				// No more data to fill buffer with
 				return -1;
@@ -205,137 +277,162 @@ public class OpenALAudio implements Audio {
 	
 	private void playSound(OpenALSound sound) {
 		int source = sound.getSource();
-		if(source != 0) {
+		if(source != -1) {
 			AL10.alSourcef(source, AL10.AL_PITCH, (float)sound.getPitch());
 			AL10.alSourcef(source, AL10.AL_GAIN, (float)sound.getVolume());
 			AL10.alSource(source, AL10.AL_POSITION, this.listenerPosition);
 			AL10.alSource(source, AL10.AL_VELOCITY, this.listenerPosition);
-			AL10.alSourcePlay(source);
+			this.sourcesToPlay.put(source);
 		}
 	}
 	
-	private void stopSource(int source) {
-		if(source != 0) {
-			AL10.alSourceStop(source);
-			AL10.alSourcei(source, AL10.AL_BUFFER, 0);
+	private void resumeSound(OpenALSound sound) {
+		int source = sound.getSource();
+		if(source != -1) {
+			AL10.alSourcef(source, AL10.AL_PITCH, (float)sound.getPitch());
+			AL10.alSourcef(source, AL10.AL_GAIN, (float)sound.getVolume());
+			AL10.alSource(source, AL10.AL_POSITION, this.listenerPosition);
+			AL10.alSource(source, AL10.AL_VELOCITY, this.listenerPosition);
+			this.sourcesToResume.put(source);
+		}
+	}
+	
+	private void pauseSound(OpenALSound sound) {
+		int source = sound.getSource();
+		if(source != -1) {
+			this.sourcesToPause.put(source);
 		}
 	}
 	
 	private void stopSound(OpenALSound sound) {
 		int source = sound.getSource();
-		this.stopSource(source);
-		sound.setSource(0);
+		
+		if(source != -1) {
+			this.sourcesToStop.put(source);
+			sound.setSource(-1);
+		}
 	}
 	
 	private void updateSound(OpenALSound sound, double deltaTime) {
 		int source = sound.getSource();
+
+		OpenALSound.Command nextCommand = sound.popNextCommant(); 
 		
-		// The sound is not playing
-		if(sound.isStopped() && sound.getSource() > 0) {
+		if(nextCommand == OpenALSound.Command.PLAY) {
 			this.stopSound(sound);
-			return;
-		}
-		
-		// If the sound has a stop source request
-		if(sound.getStopSource() != 0) {
-			this.stopSource(sound.getStopSource());
-			sound.setStopSource(0);
-		}
-		
-		// If the sound has no source yet, generate it
-		if(source == 0) {
-			source = this.findFreeSource();
-			sound.setSource(source);
-		}
-		
-		// Update volume for this sound
-		if(sound.isPlaying()) {
-			AL10.alSourcef(source, AL10.AL_GAIN, (float)sound.getVolume());
-			AL10.alSourcef(source, AL10.AL_PITCH, (float)sound.getPitch());
-		}
-		
-		if(sound.isPlaying() && sound.isStream()) {
-			int state = AL10.alGetSourcei(source, AL10.AL_SOURCE_STATE);
-			int queued = AL10.alGetSourcei(source, AL10.AL_BUFFERS_QUEUED);
-			int processed = AL10.alGetSourcei(source, AL10.AL_BUFFERS_PROCESSED);
 			
-			// If the sound has stopped, the stream reached its end and it is
-			// not looping, stop it and reset stream/data
-			if(state == AL10.AL_STOPPED && sound.eos() && !sound.isLooping()) {
-				this.stopSound(sound);
-				sound.reset();
-				return;
+			sound.setIsPlaying(true);
+			
+			source = this.claimSource();
+			sound.setSource(source);
+			sound.reset();
+			
+			this.playSound(sound);
+		}
+		else if(nextCommand == OpenALSound.Command.PAUSE) {
+			sound.setIsPaused(true);
+			
+			this.pauseSound(sound);
+		}
+		else if(nextCommand == OpenALSound.Command.RESUME) {
+			sound.setIsPlaying(true);
+
+			if(source == -1) {
+				source = this.claimSource();
+				sound.setSource(source);
 			}
 			
-			// Make sure we have 3 buffers on a stream
-			if(queued < 3) {
-				for(int i=0; i<3-queued; i++) {
-					int buffer = this.createBuffer();
-					int length = this.fillBuffer(buffer, sound);
+			this.resumeSound(sound);
+		}
+		else if(nextCommand == OpenALSound.Command.STOP) {
+			sound.setIsStopped(true);
+			sound.reset();
+			
+			this.stopSound(sound);
+		}
+		
+		if(source != -1) {
+			if(sound.isPlaying() && sound.isStream()) {
+				int state = AL10.alGetSourcei(source, AL10.AL_SOURCE_STATE);
+				int queued = AL10.alGetSourcei(source, AL10.AL_BUFFERS_QUEUED);
+				int processed = AL10.alGetSourcei(source, AL10.AL_BUFFERS_PROCESSED);
+				
+				// If the sound has stopped, the stream reached its end and it is
+				// not looping, stop it and reset stream/data
+				if(state == AL10.AL_STOPPED && sound.eos() && !sound.isLooping()) {
+					this.stopSound(sound);
+				}
+				// Otherwise fill up buffers
+				else {			
+					// Make sure we have 3 buffers on a stream
+					if(queued < 3) {
+						for(int i=0; i<3-queued; i++) {
+							int buffer = this.createBuffer();
+							int length = this.fillBuffer(buffer, sound);
+							
+							// Only queue if buffer got positive length
+							if(length > 0) {
+								AL10.alSourceQueueBuffers(source, buffer);
+							}
+						}
+					}
 					
-					// Only queue if buffer got positive length
-					if(length > 0) {
-						AL10.alSourceQueueBuffers(source, buffer);
+					// Refill processed buffers
+					while(processed > 0) {
+						int buffer = AL10.alSourceUnqueueBuffers(source);
+						int length = this.fillBuffer(buffer, sound);
+		
+						// Only queue if buffer got positive length
+						if(length > 0) {
+							AL10.alSourceQueueBuffers(source, buffer);
+						}
+						
+						processed--;
+					}
+					
+					// Make sure source is playing
+					if(state != AL10.AL_PLAYING) {
+						this.playSound(sound);
+					}
+				}
+			} 
+			else if(sound.isPlaying() && !sound.isStream()) {
+				int state = AL10.alGetSourcei(source, AL10.AL_SOURCE_STATE);
+				int buffer = AL10.alGetSourcei(source, AL10.AL_BUFFER);
+				
+				// If the buffer is out and stream is at end, stop sound
+				if(state == AL10.AL_STOPPED && !sound.isLooping()) {
+					this.stopSound(sound);
+				} 
+				else { 
+					// Make sure the sound has a buffer
+					if(buffer == -1) {
+						buffer = sound.getBuffer();
+						
+						// If the sound has no buffer, create it
+						if(buffer == -1) {
+							buffer = this.createBuffer();
+							sound.setBuffer(buffer);
+							this.fillBuffer(buffer, sound);
+						}
+						
+						AL10.alSourcei(source, AL10.AL_BUFFER, buffer);			
 					}
 				}
 			}
-			
-			// Refill processed buffers
-			while(processed > 0) {
-				int buffer = AL10.alSourceUnqueueBuffers(source);
-				int length = this.fillBuffer(buffer, sound);
-
-				// Only queue if buffer got positive length
-				if(length > 0) {
-					AL10.alSourceQueueBuffers(source, buffer);
-				}
-				
-				processed--;
+	
+			// Update volume for this sound
+			if(sound.isPlaying()) {
+				sound.updateFade(deltaTime);
+				AL10.alSourcef(source, AL10.AL_GAIN, (float)sound.getVolume());
+				AL10.alSourcef(source, AL10.AL_PITCH, (float)sound.getPitch());
 			}
 			
-			// If the sound is not playing, play it
-			if(state != AL10.AL_PLAYING) {
-				this.playSound(sound);
-			}
-		} 
-		else if(sound.isPlaying() && !sound.isStream()) {
-			int state = AL10.alGetSourcei(source, AL10.AL_SOURCE_STATE);
-			
-			// If the buffer is out and stream is at end, stop sound
-			if(state == AL10.AL_STOPPED && sound.eos()) {
-				this.stopSound(sound);
-				return;
-			}
-
-			// Set sound to looping if requested
-			if(sound.isLooping()) {
+			// Update looping for this sound
+			if(!sound.isStream() && sound.isLooping()) {
 				AL10.alSourcei(source, AL10.AL_LOOPING, AL10.AL_TRUE);
 			} else {
 				AL10.alSourcei(source, AL10.AL_LOOPING, AL10.AL_FALSE);
-			}
-			
-			// If the sound is not playing, give it a buffer and play it
-			if(state != AL10.AL_PLAYING) {
-				int buffer = sound.getBuffer();
-				
-				// If the sound has no buffer, create it
-				if(buffer == 0) {
-					buffer = this.createBuffer();
-					sound.setBuffer(buffer);
-					this.fillBuffer(buffer, sound);
-				}
-				
-				// Connect buffer to source
-				AL10.alSourcei(source, AL10.AL_BUFFER, buffer);			
-				this.playSound(sound);
-			}			
-		}
-		else if(sound.isPaused()) {
-			int state = AL10.alGetSourcei(source, AL10.AL_SOURCE_STATE);
-			
-			// If the sound is playing, pause it
-			if(state == AL10.AL_PLAYING) {
-				AL10.alSourcei(source, AL10.AL_SOURCE_STATE, AL10.AL_PAUSED);
 			}
 		}
 	}

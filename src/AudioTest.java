@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.channels.ClosedChannelException;
+import java.nio.channels.FileChannel;
 import java.util.Locale;
 import java.util.Scanner;
 
@@ -22,6 +23,7 @@ import org.lwjgl.openal.AL10;
 import org.lwjgl.util.WaveData;
 
 import org.newdawn.slick.util.Log;
+
 
 public class AudioTest {
 	public static void main(String[] args) {
@@ -48,7 +50,7 @@ public class AudioTest {
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		}
-
+		
 		PCMFloatChannel c1 = null;
 		PCMFloatChannel c2 = null;
 		PCMFloatChannel c3 = null;
@@ -59,14 +61,14 @@ public class AudioTest {
 		PCMFloatChannel c8 = null;
 
 		try {
-			c1 = new OggFloatChannel(new FileInputStream("music1_bass.ogg").getChannel());
-			c2 = new OggFloatChannel(new FileInputStream("music1_bass2.ogg").getChannel());
-			c3 = new OggFloatChannel(new FileInputStream("music1_chord.ogg").getChannel());
-			c4 = new OggFloatChannel(new FileInputStream("music1_hh.ogg").getChannel());
-			c5 = new OggFloatChannel(new FileInputStream("music1_kick.ogg").getChannel());
-			c6 = new OggFloatChannel(new FileInputStream("music1_lead.ogg").getChannel());
-			c7 = new OggFloatChannel(new FileInputStream("music1_lead2.ogg").getChannel());
-			c8 = new OggFloatChannel(new FileInputStream("music1_lead3.ogg").getChannel());
+			c1 = new OggFloatChannel(Files.internal("music1_bass.ogg").getReadChannel());
+			c2 = new OggFloatChannel(Files.internal("music1_bass2.ogg").getReadChannel());
+			c3 = new OggFloatChannel(Files.internal("music1_chord.ogg").getReadChannel());
+			c4 = new OggFloatChannel(Files.internal("music1_hh.ogg").getReadChannel());
+			c5 = new OggFloatChannel(Files.internal("music1_kick.ogg").getReadChannel());
+			c6 = new OggFloatChannel(Files.internal("music1_lead.ogg").getReadChannel());
+			c7 = new OggFloatChannel(Files.internal("music1_lead2.ogg").getReadChannel());
+			c8 = new OggFloatChannel(Files.internal("music1_lead3.ogg").getReadChannel());
 //			c1 = new OggFloatChannel(new FileInputStream("test.ogg").getChannel());
 //			c2 = new OggFloatChannel(new FileInputStream("test.ogg").getChannel());
 //			c3 = new OggFloatChannel(new FileInputStream("test.ogg").getChannel());
@@ -114,27 +116,65 @@ public class AudioTest {
 //		}
 		
 		
-		//Sound sound = audio.newSoundStream(mixer);
 		Sound sound = audio.newSoundStream(mixer);
+		//Sound sound = audio.newSound("menumove.ogg");
 		sound.setLooping(true);
-		sound.play();
+		//sound.fadeIn(3.0);
+		Sound selectsound1 = audio.newSound("music1_kick.ogg");
+		selectsound1.setLooping(true);
 
+		Sound selectsound2 = audio.newSound("music1_hh.ogg");
+		selectsound2.setLooping(true);
+
+		Sound selectsound3 = audio.newSound("music1_lead2.ogg");
+		selectsound3.setLooping(true);
+
+		//sound.play();
+		//sound.setLooping(true);
+		//sound.play();
+/*
 		CueManager cueManager = new CueManager();
 		CueSheet cueSheet = new CueSheet();
 		//cueSheet.addCue(0.0, 5.0, new DoubleCue(sound, "pitch", 0.7, 1.1), new Functions.SinSquare(1.0, 0.5));
-		cueSheet.addCue(0.0, 3.0, new Cue(sound, "pitch", 0.7, 1.1, new Functions.InterpolateDouble()));
-		cueSheet.addCue(3.0, 6.0, new Cue(sound, "pitch", 1.1, 1.1, new Functions.InterpolateDouble()));
-		cueSheet.addCue(6.0, 7.0, new Cue(sound, "pitch", 1.1, 0.1, new Functions.InterpolateDouble()));
-		cueSheet.addCue(0.0, 7.0, new Cue(sound, "volume", 0.1, 1.0, new Functions.InterpolateDouble(), new Functions.SinSquare(1.0, 1.0)));
+		cueSheet.addCue(0.0, 1.5, new Cue(sound, "pitch", 0.0, 1.0, new Functions.InterpolateDouble()));
+		//cueSheet.addCue(3.0, 6.0, new Cue(sound, "pitch", 1.0, 1.0, new Functions.InterpolateDouble()));
+		//cueSheet.addCue(6.0, 7.0, new Cue(sound, "pitch", 1.1, 0.1, new Functions.InterpolateDouble()));
+		cueSheet.addCue(0.0, 4.0, new Cue(sound, "volume", 0.0, 1.0, new Functions.InterpolateDouble()));
 		
 		//cueSheet.addCue(0.0, 3.0, new Cue<Double>("volume", 0.4, 1.0, new Functions.InterpolateDouble()));
 		//cueSheet.addCue(0.0, 10.0, new Cue<Double>("volume", 0.4, 1.0, new Functions.InterpolateDouble()), new Functions.SinSquare(1.0, 2));
-		cueSheet.setLoopMode(CueSheet.LoopMode.NORMAL);
-		cueManager.addCueSheet(cueSheet);
+		cueSheet.setLoopMode(CueSheet.LoopMode.NONE);*/
+		//cueManager.addCueSheet(cueSheet);
+		//sound.fadeTo(3.0, 0.3);
 
 		int fps = 60;
 		while (!Display.isCloseRequested()) {
-			cueManager.update(1.0/fps);
+			//cueManager.update(1.0/fps);
+			//selectsound.play();
+			while (Keyboard.next()) {
+			    if (Keyboard.getEventKeyState()) {
+			        if (Keyboard.getEventKey() == Keyboard.KEY_A) {
+			    		selectsound1.play();
+			    		selectsound2.play();
+			    		selectsound3.fadeIn(5.0);
+			        }
+			        if (Keyboard.getEventKey() == Keyboard.KEY_S) {
+			    		selectsound1.pause();
+			    		selectsound2.pause();
+			    		selectsound3.pause();
+			        }
+			        if (Keyboard.getEventKey() == Keyboard.KEY_D) {
+			    		selectsound1.resume();
+			    		selectsound2.resume();
+			    		selectsound3.resume();
+			        }
+			        if (Keyboard.getEventKey() == Keyboard.KEY_F) {
+			    		selectsound1.stop();
+			    		selectsound2.stop();
+			    		selectsound3.stop();
+			        }
+			    }
+			}
 			audio.update(1.0/fps);
 			Display.sync(fps);
 		    Display.update();

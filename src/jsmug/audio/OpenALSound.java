@@ -4,6 +4,8 @@ import java.nio.FloatBuffer;
 import org.lwjgl.BufferUtils;
 
 class OpenALSound implements Sound {
+	public enum Command {PLAY, RESUME, PAUSE, STOP, NONE};
+	
 	boolean isPlaying = false;
 	boolean isPaused = false;
 	boolean isStopped = true;
@@ -11,9 +13,9 @@ class OpenALSound implements Sound {
 	boolean isLooping = false;
 	boolean eos = true;
 	
-	int source = 0;
-	int stopSource = 0;
-	int buffer = 0;
+	int source = -1;
+	int stopSource = -1;
+	int buffer = -1;
 	
 	double volume = 1.0f;
 	double pitch = 1.0f;
@@ -21,6 +23,13 @@ class OpenALSound implements Sound {
 	int sampleRate = 0;
 	int bits = 0;
 	int channels = 0;
+	
+	double fadeFrom = 0.0;
+	double fadeTo = 0.0;
+	double fadeTimer = 0.0;
+	double fadeDuration = 0.0;
+	
+	private Command nextCommand = Command.NONE;
 	
 	PCMFloatChannel input;
 	FloatBuffer data = null;
@@ -85,6 +94,10 @@ class OpenALSound implements Sound {
 			}
 		} else {
 			length = this.input.read(dst);
+			
+			if(length == -1) {
+				this.eos = true;
+			}
 		}
 		
 		return length;
@@ -116,39 +129,22 @@ class OpenALSound implements Sound {
 	
 	@Override
 	public void play() {
-		if(this.isPlaying || this.isPaused) {
-			this.stop();
-		}
-		
-		this.isPlaying = true;
-		this.isPaused = false;
-		this.isStopped = false;
+		this.nextCommand = Command.PLAY;
 	}
 
 	@Override
 	public void pause() {
-		this.isPlaying = false;
-		this.isPaused = true;
+		this.nextCommand = Command.PAUSE;
 	}
 
 	@Override
 	public void resume() {
-		this.isPlaying = true;
-		this.isPaused = false;
+		this.nextCommand = Command.RESUME;
 	}
 
 	@Override
 	public void stop() {
-		this.isPlaying = false;
-		this.isPaused = false;
-		this.isStopped = true;
-		
-		if(this.source != 0) {
-			this.stopSource = this.source;
-			this.source = 0;
-		}
-		
-		this.reset();
+		this.nextCommand = Command.STOP;
 	}
 
 	@Override
@@ -249,5 +245,68 @@ class OpenALSound implements Sound {
 	@Override
 	public double getPitch() {
 		return this.pitch;
+	}
+
+	@Override
+	public void fadeIn(double duration) {
+		this.play();
+		this.volume = 0.0;
+		this.fadeDuration = duration;
+		this.fadeFrom = this.volume;
+		this.fadeTo = 1.0;
+		this.fadeTimer = 0.0;
+	}
+
+	@Override
+	public void fadeOut(double duration) {
+		this.fadeTo(duration, 0.0);
+	}
+
+	@Override
+	public void fadeTo(double duration, double volume) {
+		this.fadeDuration = duration;
+		this.fadeFrom = this.volume;
+		this.fadeTo = volume;
+		this.fadeTimer = 0.0;
+	}
+	
+	public void updateFade(double deltaTime) {
+		if(this.fadeTimer < this.fadeDuration) {
+			this.fadeTimer += deltaTime;
+			this.volume = (this.fadeTo - this.fadeFrom)*this.fadeTimer/this.fadeDuration+this.fadeFrom;
+		}
+	}
+	
+	public Command popNextCommant() {
+		Command command = this.nextCommand;
+		this.nextCommand = Command.NONE;
+		return command;
+	}
+	
+	public void setIsPlaying(boolean isPlaying) {
+		if(isPlaying) {
+			this.isPaused = false;
+			this.isStopped = false;
+		}
+		
+		this.isPlaying = isPlaying;
+	}
+
+	public void setIsStopped(boolean isStopped) {
+		if(isStopped) {
+			this.isPaused = false;
+			this.isPlaying = false;
+		}
+		
+		this.isStopped = isStopped;
+	}
+
+	public void setIsPaused(boolean isPaused) {
+		if(isPaused) {
+			this.isPlaying = false;
+			this.isStopped = false;
+		}
+		
+		this.isPaused = isPaused;
 	}
 }
